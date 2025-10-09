@@ -109,7 +109,27 @@ function M.send_message(prompt, opts)
     :create_message(state.active_session.id, params)
     :and_then(function(response)
       state.last_output = os.time()
-      ui.render_output()
+
+      if response and response.info and response.parts then
+        local user_message = {
+          id = 'user_' .. response.info.id,
+          role = 'user',
+          parts = params.parts or {},
+          time = { created = response.info.time.created },
+          sessionID = response.info.sessionID,
+          tokens = { input = 0, output = 0, reasoning = 0, cache = { read = 0, write = 0 } },
+        }
+
+        local assistant_message = vim.tbl_extend('force', response.info, {
+          parts = response.parts,
+        })
+
+        ui.render_incremental_output(user_message)
+        ui.render_incremental_output(assistant_message)
+      else
+        ui.render_output()
+      end
+
       M.after_run(prompt)
     end)
     :catch(function(err)

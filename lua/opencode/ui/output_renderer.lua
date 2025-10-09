@@ -76,34 +76,25 @@ function M._read_session(force_refresh)
   return output_lines
 end
 
-function M.start_refresh_timer(windows)
-  if M._refresh_timer then
-    return
+function M._add_message_incremental(message)
+  if not state.active_session or not message then
+    return nil
   end
-  M._refresh_timer = Timer.new({
-    interval = 300,
-    on_tick = function()
-      if state.is_running() then
-        if M._should_refresh_content() then
-          vim.cmd('checktime')
-          M.render(windows, true)
-        end
-        return true
-      else
-        M.stop_refresh_timer()
-        return false
-      end
-    end,
-    on_stop = function()
-      M.render(windows, true)
-      vim.defer_fn(function()
-        M.render(windows, true)
-        vim.cmd('checktime')
-      end, 300)
-    end,
-    repeat_timer = true,
-  })
-  M._refresh_timer:start()
+
+  local output_lines = formatter.add_message_incremental(message)
+  M._cache.output_lines = output_lines
+
+  if state.active_session.parts_path then
+    local stat = vim.loop.fs_stat(state.active_session.parts_path)
+    if stat then
+      M._cache.last_modified = stat.mtime.sec
+    end
+  end
+
+  return output_lines
+end
+
+function M.start_refresh_timer(windows)
 end
 
 function M.stop_refresh_timer()
@@ -145,6 +136,42 @@ M.render = vim.schedule_wrap(function(windows, force_refresh)
     local output_changed = M.write_output(windows, output_lines)
 
     if output_changed or force_refresh then
+      vim.schedule(function()
+        M.render_markdown()
+        M.handle_auto_scroll(windows)
+        require('opencode.ui.topbar').render()
+      end)
+    end
+  end
+  pcall(function()
+    render()
+    require('opencode.ui.mention').highlight_all_mentions(windows.output_buf)
+    require('opencode.ui.contextual_actions').setup_contextual_actions()
+    require('opencode.ui.footer').render(windows)
+  end)
+end)
+
+M.render_incremental = vim.schedule_wrap(function(windows, message)
+  if not output_window.mounted(windows) then
+    return
+  end
+
+  local function render()
+    if not state.active_session then
+      return
+    end
+
+    local output_lines = M._add_message_incremental(message)
+
+    if not output_lines then
+      return
+    end
+
+    M.handle_loading(windows)
+
+    local output_changed = M.write_output(windows, output_lines)
+
+    if output_changed then
       vim.schedule(function()
         M.render_markdown()
         M.handle_auto_scroll(windows)

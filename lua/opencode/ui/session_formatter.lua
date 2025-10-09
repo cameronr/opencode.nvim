@@ -85,6 +85,65 @@ function M.format_session(session)
   return M.output:get_lines()
 end
 
+---@param message Message Message to append to the session
+---@return string[]|nil Formatted session lines
+function M.add_message_incremental(message)
+  if not message then
+    return nil
+  end
+
+  if not state.messages then
+    state.messages = {}
+  end
+
+  table.insert(state.messages, message)
+  local msg_idx = #state.messages
+
+  state.current_message = message
+
+  if not state.current_model and message.providerID and message.providerID ~= '' then
+    state.current_model = message.providerID .. '/' .. message.modelID
+  end
+
+  if message.tokens and message.tokens.input > 0 then
+    state.tokens_count = message.tokens.input + message.tokens.output + message.tokens.cache.read + message.tokens.cache.write
+  end
+
+  if message.cost and type(message.cost) == 'number' then
+    state.cost = message.cost
+  end
+
+  M.output:add_lines(M.separator)
+
+  M._format_message_header(message, msg_idx)
+
+  for j, part in ipairs(message.parts or {}) do
+    M._current = { msg_idx = msg_idx, part_idx = j, role = message.role, type = part.type, snapshot = part.snapshot }
+    M.output:add_metadata(M._current)
+
+    if part.type == 'text' and part.text then
+      if message.role == 'user' and part.synthetic ~= true then
+        state.last_user_message = message
+        M._format_user_message(vim.trim(part.text), message)
+      elseif message.role == 'assistant' then
+        M._format_assistant_message(vim.trim(part.text))
+      end
+    elseif part.type == 'tool' then
+      M._format_tool(part)
+    elseif part.type == 'patch' and part.hash then
+      M._format_patch(part)
+    end
+    M.output:add_empty_line()
+  end
+
+  if message.error and message.error ~= '' then
+    M._format_error(message)
+  end
+
+  M.output:add_empty_line()
+  return M.output:get_lines()
+end
+
 function M._format_permission_request()
   local config_mod = require('opencode.config')
   local keys
