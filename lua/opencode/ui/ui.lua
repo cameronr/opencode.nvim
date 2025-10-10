@@ -189,7 +189,7 @@ end
 
 function M.render_output(force)
   force = force or false
-  vim.notify('render_output\n' .. debug.traceback())
+  vim.notify('render_output, force: ' .. vim.inspect(force) .. '\n' .. debug.traceback())
   renderer.render(state.windows, force)
 end
 

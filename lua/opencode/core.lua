@@ -69,7 +69,7 @@ function M.open(opts)
     end
 
     if (are_windows_closed or ui.is_output_empty()) and not state.display_route then
-      ui.render_output()
+      ui.render_output(true)
       ui.scroll_to_bottom()
     end
   end

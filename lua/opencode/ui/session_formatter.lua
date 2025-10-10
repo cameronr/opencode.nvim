@@ -777,6 +777,7 @@ function M.format_part_isolated(part, message_info)
     content_added = true
   elseif part.type == 'file' then
     -- NOTE: harder to do file as part of user header (because we
+    temp_output:add_empty_line()
     -- process the message before the part has arrived) so do it
     -- here
     local path = part.filename
@@ -785,10 +786,6 @@ function M.format_part_isolated(part, message_info)
     end
     M.output:add_line(string.format('[%s](%s)', path, part.filename))
     content_added = true
-  end
-
-  if content_added then
-    temp_output:add_empty_line()
   end
 
   M.output = old_output
