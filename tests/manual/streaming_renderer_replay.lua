@@ -50,6 +50,7 @@ function M.setup_windows()
     if state.windows and state.windows.output_win then
       vim.api.nvim_set_current_win(state.windows.output_win)
       vim.api.nvim_set_option_value('signcolumn', 'yes', { win = state.windows.output_win })
+      pcall(vim.api.nvim_buf_del_keymap, state.windows.output_buf, 'n', '<esc>')
     end
   end)
 
@@ -65,13 +66,13 @@ function M.emit_event(event)
     vim.notify('Event ' .. M.current_index .. '/' .. #M.events .. ': ' .. event.type, vim.log.levels.INFO)
 
     if event.type == 'message.updated' then
-      streaming_renderer.handle_message_updated(event)
+      streaming_renderer.handle_message_updated(vim.deepcopy(event))
     elseif event.type == 'message.part.updated' then
-      streaming_renderer.handle_part_updated(event)
+      streaming_renderer.handle_part_updated(vim.deepcopy(event))
     elseif event.type == 'message.removed' then
-      streaming_renderer.handle_message_removed(event)
+      streaming_renderer.handle_message_removed(vim.deepcopy(event))
     elseif event.type == 'message.part.removed' then
-      streaming_renderer.handle_part_removed(event)
+      streaming_renderer.handle_part_removed(vim.deepcopy(event))
     elseif event.type == 'session.compacted' then
       streaming_renderer.handle_session_compacted()
     end
@@ -130,14 +131,7 @@ end
 function M.reset()
   M.replay_stop()
   M.current_index = 0
-  streaming_renderer.reset()
-
-  if state.windows and state.windows.output_buf then
-    vim.api.nvim_set_option_value('modifiable', true, { buf = state.windows.output_buf })
-    vim.api.nvim_buf_set_lines(state.windows.output_buf, 0, -1, false, {})
-    vim.api.nvim_set_option_value('modifiable', false, { buf = state.windows.output_buf })
-  end
-
+  M.clear()
   vim.notify('Reset complete. Ready to replay.', vim.log.levels.INFO)
 end
 
@@ -160,8 +154,6 @@ function M.clear()
     vim.api.nvim_buf_set_lines(state.windows.output_buf, 0, -1, false, {})
     vim.api.nvim_set_option_value('modifiable', false, { buf = state.windows.output_buf })
   end
-
-  vim.notify('Output cleared', vim.log.levels.INFO)
 end
 
 function M.get_expected_filename(input_file)
@@ -209,11 +201,11 @@ function M.start()
     '',
     'Commands:',
     '  :ReplayLoad [file]     - Load events (default: tests/data/simple-session.json)',
-    '  :ReplayNext            - Replay next event',
-    '  :ReplayAll [ms]        - Replay all events with delay (default 100ms)',
-    '  :ReplayStop            - Stop auto-replay',
-    '  :ReplayReset           - Reset to beginning',
-    '  :ReplayClear           - Clear output buffer',
+    '  :ReplayNext            - Replay next event (<leader>n)',
+    '  :ReplayAll [ms]        - Replay all events with delay (default 100ms) (<leader>a)',
+    '  :ReplayStop            - Stop auto-replay (<leader>s)',
+    '  :ReplayReset           - Reset to beginning (<leader>r)',
+    '  :ReplayClear           - Clear output buffer (<leader>c)',
     '  :ReplayCapture [file]  - Capture snapshot (auto-derives from loaded file)',
     '  :ReplayStatus          - Show status',
   })
@@ -259,6 +251,12 @@ function M.start()
     end
     M.capture_snapshot(filename)
   end, { nargs = '?', desc = 'Capture output snapshot', complete = 'file' })
+
+  vim.keymap.set('n', '<leader>n', ':ReplayNext<CR>')
+  vim.keymap.set('n', '<leader>s', ':ReplayStop<CR>')
+  vim.keymap.set('n', '<leader>a', ':ReplayAll<CR>')
+  vim.keymap.set('n', '<leader>c', ':ReplayClear<CR>')
+  vim.keymap.set('n', '<leader>r', ':ReplayReset<CR>')
 
   M.setup_windows()
 end
