@@ -179,7 +179,7 @@ end)
 -- end)
 
 function M.stop()
-  loading_animation.stop()
+  -- loading_animation.stop()
 
   M._cache = {
     last_modified = 0,
@@ -191,15 +191,16 @@ function M.stop()
 end
 
 function M.handle_loading(windows)
-  if state.is_running() then
-    if not loading_animation.is_running() then
-      loading_animation.start(windows)
-    end
-  else
-    if loading_animation.is_running() then
-      loading_animation.stop()
-    end
-  end
+  -- TODO: remove me
+  -- if state.is_running() then
+  --   if not loading_animation.is_running() then
+  --     loading_animation.start(windows)
+  --   end
+  -- else
+  --   if loading_animation.is_running() then
+  --     loading_animation.stop()
+  --   end
+  -- end
 end
 
 function M._last_n_lines_equal(prev_lines, current_lines, n)

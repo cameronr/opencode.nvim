@@ -88,7 +88,7 @@ function M.setup(windows)
   end)
 
   state.subscribe('job_count', function(_, new, old)
-    vim.notify('job_count changed: ' .. new .. ' (old: ' .. old .. ')')
+    -- vim.notify('job_count changed: ' .. new .. ' (old: ' .. old .. ')')
     if new == 0 or old == 0 then
       M.render(windows)
     end
