@@ -315,27 +315,27 @@ function EventManager.setup()
   local streaming_renderer = require('opencode.ui.streaming_renderer')
 
   state.event_manager:subscribe('message.updated', function(event_data)
-    -- vim.notify('message.updated\n' .. vim.inspect(event_data))
+    -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_message_updated(event_data)
   end)
 
   state.event_manager:subscribe('message.part.updated', function(event_data)
-    -- vim.notify('message.part.updated\n' .. vim.inspect(event_data))
+    -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_part_updated(event_data)
   end)
 
   state.event_manager:subscribe('message.removed', function(event_data)
-    -- vim.notify('message.removed\n' .. vim.inspect(event_data))
+    -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_message_removed(event_data)
   end)
 
   state.event_manager:subscribe('message.part.removed', function(event_data)
-    -- vim.notify('message.part.removed\n' .. vim.inspect(event_data))
+    -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_part_removed(event_data)
   end)
 
   state.event_manager:subscribe('session.compacted', function(event_data)
-    -- vim.notify('session.compacted\n' .. vim.inspect(event_data))
+    -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_session_compacted()
   end)
 end
