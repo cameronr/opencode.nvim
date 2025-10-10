@@ -6,7 +6,10 @@ if vim.fn.isdirectory(plenary_path) == 1 then
   vim.opt.runtimepath:append(plenary_path)
 end
 
-vim.opt.termguicolors = true
+vim.o.laststatus = 3
+vim.o.termguicolors = true
+vim.g.mapleader = ' '
+vim.opt.clipboard:append('unnamedplus')
 
 vim.g.opencode_config = {
   ui = {
