@@ -788,6 +788,10 @@ function M.format_part_isolated(part, message_info)
     content_added = true
   end
 
+  if content_added then
+    temp_output:add_empty_line()
+  end
+
   M.output = old_output
 
   return {
