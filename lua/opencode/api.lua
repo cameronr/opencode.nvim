@@ -34,7 +34,7 @@ function M.close()
   if state.display_route then
     state.display_route = nil
     ui.clear_output()
-    ui.render_output()
+    require('opencode.ui.streaming_renderer').reset_and_render()
     ui.scroll_to_bottom()
     return
   end
@@ -343,6 +343,7 @@ function M.initialize()
     return
   end
   state.active_session = new_session
+  require('opencode.ui.streaming_renderer').reset()
   M.open_input()
   state.api_client:init_session(state.active_session.id, {
     providerID = providerId,
@@ -529,7 +530,6 @@ function M.share()
     return
   end
 
-  ui.render_output(true)
   state.api_client
     :share_session(state.active_session.id)
     :and_then(function(response)
@@ -555,7 +555,6 @@ function M.unshare()
     return
   end
 
-  ui.render_output(true)
   state.api_client
     :unshare_session(state.active_session.id)
     :and_then(function()
@@ -591,7 +590,7 @@ function M.undo()
       state.active_session.revert = response.revert
       vim.schedule(function()
         vim.notify('Last message undone successfully', vim.log.levels.INFO)
-        ui.render_output(true)
+        require('opencode.ui.streaming_renderer').reset_and_render()
       end)
     end)
     :catch(function(err)
@@ -614,7 +613,7 @@ function M.redo()
       state.active_session.revert = response.revert
       vim.schedule(function()
         vim.notify('Last message rerterted successfully', vim.log.levels.INFO)
-        ui.render_output(true)
+        require('opencode.ui.streaming_renderer').reset_and_render()
       end)
     end)
     :catch(function(err)
@@ -638,7 +637,7 @@ function M.respond_to_permission(answer)
     :and_then(function()
       vim.schedule(function()
         state.current_permission = nil
-        ui.render_output(true)
+        require('opencode.ui.streaming_renderer').reset_and_render()
       end)
     end)
     :catch(function(err)
@@ -723,6 +722,7 @@ M.commands = {
           return
         end
         state.active_session = new_session
+        require('opencode.ui.streaming_renderer').reset()
         M.open_input()
       else
         vim.notify('Session title cannot be empty', vim.log.levels.ERROR)

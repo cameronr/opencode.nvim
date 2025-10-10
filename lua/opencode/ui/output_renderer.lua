@@ -94,17 +94,8 @@ function M._add_message_incremental(message)
   return output_lines
 end
 
-function M.start_refresh_timer(windows)
-end
-
-function M.stop_refresh_timer()
-  if M._refresh_timer then
-    M._refresh_timer:stop()
-    M._refresh_timer = nil
-  end
-end
-
 M.render = vim.schedule_wrap(function(windows, force_refresh)
+  vim.notify('full render\n')
   if not output_window.mounted(windows) then
     return
   end
@@ -190,8 +181,6 @@ end)
 function M.stop()
   loading_animation.stop()
 
-  M.stop_refresh_timer()
-
   M._cache = {
     last_modified = 0,
     output_lines = nil,
@@ -203,12 +192,10 @@ end
 
 function M.handle_loading(windows)
   if state.is_running() then
-    M.start_refresh_timer(windows)
     if not loading_animation.is_running() then
       loading_animation.start(windows)
     end
   else
-    M.stop_refresh_timer()
     if loading_animation.is_running() then
       loading_animation.stop()
     end

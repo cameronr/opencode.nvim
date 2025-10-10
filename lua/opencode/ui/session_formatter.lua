@@ -106,7 +106,10 @@ function M.add_message_incremental(message)
   end
 
   if message.tokens and message.tokens.input > 0 then
-    state.tokens_count = message.tokens.input + message.tokens.output + message.tokens.cache.read + message.tokens.cache.write
+    state.tokens_count = message.tokens.input
+      + message.tokens.output
+      + message.tokens.cache.read
+      + message.tokens.cache.write
   end
 
   if message.cost and type(message.cost) == 'number' then
@@ -445,6 +448,7 @@ function M._format_user_message(text, message)
     context = context_module.extract_from_message_legacy(text)
   else
     context = context_module.extract_from_opencode_message(message)
+    vim.notify(vim.inspect(message))
   end
 
   local start_line = M.output:get_line_count() - 1
@@ -738,6 +742,87 @@ function M._add_vertical_border(start_line, end_line, hl_group, win_col)
       virt_text_repeat_linebreak = true,
     })
   end
+end
+
+function M.format_part_isolated(part, message_info)
+  local temp_output = Output.new()
+  local old_output = M.output
+  M.output = temp_output
+
+  M._current = {
+    msg_idx = message_info.msg_idx,
+    part_idx = message_info.part_idx,
+    role = message_info.role,
+    type = part.type,
+    snapshot = part.snapshot,
+  }
+  temp_output:add_metadata(M._current)
+
+  local content_added = false
+
+  if part.type == 'text' and part.text then
+    if message_info.role == 'user' and part.synthetic ~= true then
+      state.last_user_message = message_info.message
+      M._format_user_message(vim.trim(part.text), message_info.message)
+      content_added = true
+    elseif message_info.role == 'assistant' then
+      M._format_assistant_message(vim.trim(part.text))
+      content_added = true
+    end
+  elseif part.type == 'tool' then
+    M._format_tool(part)
+    content_added = true
+  elseif part.type == 'patch' and part.hash then
+    M._format_patch(part)
+    content_added = true
+  end
+
+  if content_added then
+    temp_output:add_empty_line()
+  end
+
+  M.output = old_output
+
+  return {
+    lines = temp_output:get_lines(),
+    extmarks = temp_output:get_extmarks(),
+    metadata = temp_output:get_all_metadata(),
+    actions = temp_output.actions,
+  }
+end
+
+function M.format_message_header_isolated(message, msg_idx)
+  local temp_output = Output.new()
+  local old_output = M.output
+  M.output = temp_output
+
+  state.current_message = message
+
+  if not state.current_model and message.providerID and message.providerID ~= '' then
+    state.current_model = message.providerID .. '/' .. message.modelID
+  end
+
+  if message.tokens and message.tokens.input > 0 then
+    state.tokens_count = message.tokens.input
+      + message.tokens.output
+      + message.tokens.cache.read
+      + message.tokens.cache.write
+  end
+
+  if message.cost and type(message.cost) == 'number' then
+    state.cost = message.cost
+  end
+
+  temp_output:add_lines(M.separator)
+  M._format_message_header(message, msg_idx)
+
+  M.output = old_output
+
+  return {
+    lines = temp_output:get_lines(),
+    extmarks = temp_output:get_extmarks(),
+    metadata = temp_output:get_all_metadata(),
+  }
 end
 
 return M
