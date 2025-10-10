@@ -103,8 +103,12 @@ function M._text_to_lines(text)
     return {}
   end
   local lines = {}
+  local had_trailing_newline = text:sub(-1) == '\n'
   for line in (text .. '\n'):gmatch('([^\n]*)\n') do
     table.insert(lines, line)
+  end
+  if not had_trailing_newline and #lines > 0 and lines[#lines] == '' then
+    table.remove(lines)
   end
   return lines
 end
@@ -146,7 +150,7 @@ end
 
 function M._scroll_to_bottom()
   vim.schedule(function()
-    vim.notify('scrolling to bottom')
+    -- vim.notify('scrolling to bottom')
     require('opencode.ui.ui').scroll_to_bottom()
   end)
 end
@@ -211,6 +215,10 @@ function M._insert_part_to_buffer(part_id, formatted_data)
 
   cached.line_start = buf_lines
   cached.line_end = buf_lines + #new_lines - 1
+
+  if #new_lines > 1 and new_lines[#new_lines] == '' then
+    cached.line_end = cached.line_end - 1
+  end
 
   M._apply_extmarks(buf, cached.line_start, formatted_data.extmarks)
 
