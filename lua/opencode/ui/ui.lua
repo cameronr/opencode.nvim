@@ -193,9 +193,9 @@ function M.render_output(force)
   renderer.render(state.windows, force)
 end
 
-function M.render_incremental_output(message)
-  renderer.render_incremental(state.windows, message)
-end
+-- function M.render_incremental_output(message)
+--   renderer.render_incremental(state.windows, message)
+-- end
 
 function M.render_lines(lines)
   M.clear_output()

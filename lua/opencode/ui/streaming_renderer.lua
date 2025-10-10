@@ -1,5 +1,4 @@
 local state = require('opencode.state')
-local output_window = require('opencode.ui.output_window')
 
 local M = {}
 
@@ -12,6 +11,7 @@ function M.reset()
   M._part_cache = {}
   M._message_cache = {}
   M._session_id = nil
+  state.messages = {}
 end
 
 function M._get_buffer_line_count()
@@ -81,7 +81,7 @@ function M._apply_extmarks(buf, line_offset, extmarks)
         if type(mark) == 'function' then
           actual_mark = mark()
         end
-        
+
         if type(actual_mark) == 'table' then
           local target_line = line_offset + line_idx - 1
           pcall(vim.api.nvim_buf_set_extmark, buf, M._namespace, target_line, 0, actual_mark)
@@ -89,6 +89,13 @@ function M._apply_extmarks(buf, line_offset, extmarks)
       end
     end
   end
+end
+
+function M._set_lines(buf, start_line, end_line, strict_indexing, lines)
+  vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
+  local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, start_line, end_line, strict_indexing, lines)
+  vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+  return ok, err
 end
 
 function M._text_to_lines(text)
@@ -119,16 +126,14 @@ function M._append_delta_to_buffer(part_id, delta)
     return true
   end
 
-  vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-
   local last_line = vim.api.nvim_buf_get_lines(buf, cached.line_end, cached.line_end + 1, false)[1] or ''
   local first_delta_line = table.remove(delta_lines, 1)
   local new_last_line = last_line .. first_delta_line
 
-  local ok = pcall(vim.api.nvim_buf_set_lines, buf, cached.line_end, cached.line_end + 1, false, { new_last_line })
+  local ok = M._set_lines(buf, cached.line_end, cached.line_end + 1, false, { new_last_line })
 
   if ok and #delta_lines > 0 then
-    ok = pcall(vim.api.nvim_buf_set_lines, buf, cached.line_end + 1, cached.line_end + 1, false, delta_lines)
+    ok = M._set_lines(buf, cached.line_end + 1, cached.line_end + 1, false, delta_lines)
     if ok then
       local old_line_end = cached.line_end
       cached.line_end = cached.line_end + #delta_lines
@@ -136,12 +141,17 @@ function M._append_delta_to_buffer(part_id, delta)
     end
   end
 
-  vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
-
   return ok
 end
 
-function M._write_formatted_data(formatted_data, message_cache)
+function M._scroll_to_bottom()
+  vim.schedule(function()
+    vim.notify('scrolling to bottom')
+    require('opencode.ui.ui').scroll_to_bottom()
+  end)
+end
+
+function M._write_formatted_data(formatted_data)
   if not state.windows or not state.windows.output_buf then
     return nil
   end
@@ -154,9 +164,7 @@ function M._write_formatted_data(formatted_data, message_cache)
     return nil
   end
 
-  vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-  local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, buf_lines, -1, false, new_lines)
-  vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+  local ok, err = M._set_lines(buf, buf_lines, -1, false, new_lines)
 
   if not ok then
     return nil
@@ -173,11 +181,11 @@ end
 function M._write_message_header(message, msg_idx)
   local formatter = require('opencode.ui.session_formatter')
   local header_data = formatter.format_message_header_isolated(message, msg_idx)
-  local line_range = M._write_formatted_data(header_data, nil)
+  local line_range = M._write_formatted_data(header_data)
   return line_range
 end
 
-function M._replace_part_in_buffer(part_id, formatted_data)
+function M._insert_part_to_buffer(part_id, formatted_data)
   local cached = M._part_cache[part_id]
   if not cached then
     return false
@@ -189,47 +197,55 @@ function M._replace_part_in_buffer(part_id, formatted_data)
 
   local buf = state.windows.output_buf
   local new_lines = formatted_data.lines
+  local buf_lines = M._get_buffer_line_count()
 
-  local old_line_count = 0
-  if cached.line_start and cached.line_end then
-    old_line_count = cached.line_end - cached.line_start + 1
+  if #new_lines == 0 then
+    return true
   end
 
+  local ok = M._set_lines(buf, buf_lines, -1, false, new_lines)
+
+  if not ok then
+    return false
+  end
+
+  cached.line_start = buf_lines
+  cached.line_end = buf_lines + #new_lines - 1
+
+  M._apply_extmarks(buf, cached.line_start, formatted_data.extmarks)
+
+  return true
+end
+
+function M._replace_part_in_buffer(part_id, formatted_data)
+  local cached = M._part_cache[part_id]
+  if not cached or not cached.line_start or not cached.line_end then
+    return false
+  end
+
+  if not state.windows or not state.windows.output_buf then
+    return false
+  end
+
+  local buf = state.windows.output_buf
+  local new_lines = formatted_data.lines
+
+  local old_line_count = cached.line_end - cached.line_start + 1
   local new_line_count = #new_lines
 
-  if cached.line_start and cached.line_end then
-    vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-    local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, cached.line_start, cached.line_end + 1, false, new_lines)
-    vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+  local ok = M._set_lines(buf, cached.line_start, cached.line_end + 1, false, new_lines)
 
-    if not ok then
-      return false
-    end
+  if not ok then
+    return false
+  end
 
-    cached.line_end = cached.line_start + new_line_count - 1
+  cached.line_end = cached.line_start + new_line_count - 1
 
-    M._apply_extmarks(buf, cached.line_start, formatted_data.extmarks)
+  M._apply_extmarks(buf, cached.line_start, formatted_data.extmarks)
 
-    local line_delta = new_line_count - old_line_count
-    if line_delta ~= 0 then
-      M._shift_lines(cached.line_end + 1, line_delta)
-    end
-  else
-    local buf_lines = M._get_buffer_line_count()
-    vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-    local ok, err = pcall(vim.api.nvim_buf_set_lines, buf, buf_lines, -1, false, new_lines)
-    vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
-
-    if not ok then
-      return false
-    end
-
-    if new_line_count > 0 then
-      cached.line_start = buf_lines
-      cached.line_end = buf_lines + new_line_count - 1
-    end
-
-    M._apply_extmarks(buf, cached.line_start, formatted_data.extmarks)
+  local line_delta = new_line_count - old_line_count
+  if line_delta ~= 0 then
+    M._shift_lines(cached.line_end + 1, line_delta)
   end
 
   return true
@@ -250,9 +266,7 @@ function M._remove_part_from_buffer(part_id)
   local buf = state.windows.output_buf
   local line_count = cached.line_end - cached.line_start + 1
 
-  vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
-  pcall(vim.api.nvim_buf_set_lines, buf, cached.line_start, cached.line_end + 1, false, {})
-  vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+  M._set_lines(buf, cached.line_start, cached.line_end + 1, false, {})
 
   M._shift_lines(cached.line_end + 1, -line_count)
   M._part_cache[part_id] = nil
@@ -274,25 +288,35 @@ function M.handle_message_updated(event)
 
   M._session_id = message.sessionID
 
-  if not M._message_cache[message.id] then
-    local msg_idx = 1
-    for _, cached_msg in pairs(M._message_cache) do
-      if cached_msg.msg_idx then
-        msg_idx = math.max(msg_idx, cached_msg.msg_idx + 1)
-      end
-    end
-
-    M._message_cache[message.id] = {
-      info = message,
-      parts = {},
-      line_start = nil,
-      line_end = nil,
-      has_header = false,
-      msg_idx = msg_idx,
-    }
-  else
-    M._message_cache[message.id].info = message
+  if not state.messages then
+    state.messages = {}
   end
+
+  local found_idx = nil
+  for i = #state.messages, math.max(1, #state.messages - 2), -1 do
+    if state.messages[i].id == message.id then
+      found_idx = i
+      break
+    end
+  end
+
+  if found_idx then
+    state.messages[found_idx] = message
+  else
+    table.insert(state.messages, message)
+    found_idx = #state.messages
+
+    local header_range = M._write_message_header(message, found_idx)
+    if header_range then
+      if not M._message_cache[message.id] then
+        M._message_cache[message.id] = {}
+      end
+      M._message_cache[message.id].line_start = header_range.line_start
+      M._message_cache[message.id].line_end = header_range.line_end
+    end
+  end
+
+  M._scroll_to_bottom()
 end
 
 function M.handle_part_updated(event)
@@ -306,118 +330,87 @@ function M.handle_part_updated(event)
   end
 
   if M._session_id and M._session_id ~= part.sessionID then
-    M.reset()
+    vim.notify('Session id does not match, discarding part: ' .. vim.inspect(part), vim.log.levels.WARN)
+    return
   end
 
-  M._session_id = part.sessionID
-
-  local message_cache = M._message_cache[part.messageID]
-  if not message_cache then
-    local msg_idx = 1
-    for _, cached_msg in pairs(M._message_cache) do
-      if cached_msg.msg_idx then
-        msg_idx = math.max(msg_idx, cached_msg.msg_idx + 1)
-      end
-    end
-
-    M._message_cache[part.messageID] = {
-      info = nil,
-      parts = {},
-      line_start = nil,
-      line_end = nil,
-      has_header = false,
-      msg_idx = msg_idx,
-    }
-    message_cache = M._message_cache[part.messageID]
+  if not state.messages then
+    state.messages = {}
   end
 
-  if message_cache.info and not message_cache.has_header then
-    vim.notify('DEBUG: Writing header for msg ' .. part.messageID .. ', role=' .. (message_cache.info.role or 'nil'))
-    local header_range = M._write_message_header(message_cache.info, message_cache.msg_idx)
-    if header_range then
-      message_cache.has_header = true
-      message_cache.line_start = header_range.line_start
-      message_cache.line_end = header_range.line_end
-      vim.notify('DEBUG: Header written, lines ' .. header_range.line_start .. '-' .. header_range.line_end)
-    else
-      vim.notify('DEBUG: Header write FAILED')
+  local message, msg_idx
+  for i = #state.messages, math.max(1, #state.messages - 2), -1 do
+    if state.messages[i].id == part.messageID then
+      message = state.messages[i]
+      msg_idx = i
+      break
     end
   end
+
+  if not message then
+    vim.notify('Could not find message for part: ' .. vim.inspect(part), vim.log.levels.WARN)
+    return
+  end
+
+  message.parts = message.parts or {}
 
   local is_new_part = not M._part_cache[part.id]
+  local part_idx = nil
+
   if is_new_part then
-    table.insert(message_cache.parts, part.id)
+    table.insert(message.parts, part)
+    part_idx = #message.parts
+  else
+    for i, p in ipairs(message.parts) do
+      if p.id == part.id then
+        message.parts[i] = part
+        part_idx = i
+        break
+      end
+    end
   end
 
   local part_text = part.text or ''
 
   if not is_new_part and M._is_streaming_update(part.id, part_text) then
     local delta = M._calculate_delta(part.id, part_text)
-    local success = M._append_delta_to_buffer(part.id, delta)
-  else
-    if not M._part_cache[part.id] then
-      M._part_cache[part.id] = {
-        text = nil,
-        line_start = nil,
-        line_end = nil,
-        message_id = part.messageID,
-        type = part.type,
-      }
-    end
-
-    if not message_cache.info then
-      vim.notify('DEBUG: No msg info for part ' .. part.id .. ', using fallback')
-      M._replace_part_in_buffer(part.id, { lines = M._text_to_lines(part_text), extmarks = {} })
-      M._part_cache[part.id].text = part_text
-    else
-      vim.notify('DEBUG: Formatting part ' .. part.id .. ', type=' .. (part.type or 'nil') .. ', role=' .. (message_cache.info.role or 'nil') .. ', synthetic=' .. tostring(part.synthetic))
-      local part_idx = 0
-      for i, pid in ipairs(message_cache.parts) do
-        if pid == part.id then
-          part_idx = i
-          break
-        end
-      end
-
-      local message_with_parts = vim.tbl_extend('force', message_cache.info, {
-        parts = {}
-      })
-      
-      for _, pid in ipairs(message_cache.parts) do
-        if pid == part.id then
-          table.insert(message_with_parts.parts, part)
-        else
-          local cached_part = M._part_cache[pid]
-          if cached_part then
-            table.insert(message_with_parts.parts, {
-              id = pid,
-              messageID = cached_part.message_id,
-              type = cached_part.type,
-              text = cached_part.text,
-            })
-          end
-        end
-      end
-
-      local formatter = require('opencode.ui.session_formatter')
-      local ok, formatted = pcall(formatter.format_part_isolated, part, {
-        msg_idx = message_cache.msg_idx,
-        part_idx = part_idx,
-        role = message_cache.info.role,
-        message = message_with_parts,
-      })
-
-      if not ok then
-        vim.notify('DEBUG: Formatter ERROR: ' .. tostring(formatted))
-        return
-      end
-
-      vim.notify('DEBUG: Formatted result has ' .. #formatted.lines .. ' lines: ' .. vim.inspect(formatted.lines))
-      local success = M._replace_part_in_buffer(part.id, formatted)
-      vim.notify('DEBUG: _replace_part_in_buffer returned ' .. tostring(success))
-      M._part_cache[part.id].text = part_text
-    end
+    M._append_delta_to_buffer(part.id, delta)
+    M._part_cache[part.id].text = part_text
+    M._scroll_to_bottom()
+    return
   end
+
+  if not M._part_cache[part.id] then
+    M._part_cache[part.id] = {
+      text = nil,
+      line_start = nil,
+      line_end = nil,
+      message_id = part.messageID,
+      type = part.type,
+    }
+  end
+
+  local formatter = require('opencode.ui.session_formatter')
+  local ok, formatted = pcall(formatter.format_part_isolated, part, {
+    msg_idx = msg_idx,
+    part_idx = part_idx,
+    role = message.role,
+    message = message,
+  })
+
+  if not ok then
+    vim.notify('format_part_isolated error: ' .. tostring(formatted), vim.log.levels.ERROR)
+    return
+  end
+
+  if is_new_part then
+    M._insert_part_to_buffer(part.id, formatted)
+  else
+    M._replace_part_in_buffer(part.id, formatted)
+  end
+
+  M._part_cache[part.id].text = part_text
+  M._scroll_to_bottom()
 end
 
 function M.handle_part_removed(event)
@@ -432,11 +425,17 @@ function M.handle_part_removed(event)
 
   local cached = M._part_cache[part_id]
   if cached and cached.message_id then
-    local message_cache = M._message_cache[cached.message_id]
-    if message_cache and message_cache.parts then
-      for i, pid in ipairs(message_cache.parts) do
-        if pid == part_id then
-          table.remove(message_cache.parts, i)
+    if state.messages then
+      for i = #state.messages, math.max(1, #state.messages - 2), -1 do
+        if state.messages[i].id == cached.message_id then
+          if state.messages[i].parts then
+            for j, part in ipairs(state.messages[i].parts) do
+              if part.id == part_id then
+                table.remove(state.messages[i].parts, j)
+                break
+              end
+            end
+          end
           break
         end
       end
@@ -456,17 +455,36 @@ function M.handle_message_removed(event)
     return
   end
 
-  local message_cache = M._message_cache[message_id]
-  if not message_cache or not message_cache.parts then
-    M._message_cache[message_id] = nil
+  if not state.messages then
     return
   end
 
-  for _, part_id in ipairs(message_cache.parts) do
-    M._remove_part_from_buffer(part_id)
+  local message_idx = nil
+  for i = #state.messages, 1, -1 do
+    if state.messages[i].id == message_id then
+      message_idx = i
+      break
+    end
   end
 
-  M._message_cache[message_id] = nil
+  if not message_idx then
+    return
+  end
+
+  local message = state.messages[message_idx]
+  if message.parts then
+    for _, part in ipairs(message.parts) do
+      if part.id then
+        M._remove_part_from_buffer(part.id)
+      end
+    end
+  end
+
+  table.remove(state.messages, message_idx)
+
+  if M._message_cache[message_id] then
+    M._message_cache[message_id] = nil
+  end
 end
 
 function M.handle_session_compacted()
@@ -477,7 +495,7 @@ end
 
 function M.reset_and_render()
   M.reset()
-  vim.notify('reset and render')
+  vim.notify('reset and render:\n' .. debug.traceback())
   require('opencode.ui.output_renderer').render(state.windows, true)
 end
 

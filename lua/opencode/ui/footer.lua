@@ -25,18 +25,20 @@ function M.render(windows)
     append_to_footer(legend)
   end
 
-  if state.current_model then
-    if config.ui.display_context_size then
-      local provider, model = state.current_model:match('^(.-)/(.+)$')
-      local model_info = config_file.get_model_info(provider, model)
-      local limit = state.tokens_count and model_info and model_info.limit and model_info.limit.context or 0
-      append_to_footer(util.format_number(state.tokens_count))
-      append_to_footer(util.format_percentage(limit > 0 and state.tokens_count / limit))
-    end
-    if config.ui.display_cost then
-      append_to_footer(util.format_cost(state.cost))
-    end
-  end
+  -- FIXME: stack overflow with this block when footer listens to job_count
+  -- I think due to get_model_info kicking off a job to get the providers
+  -- if state.current_model then
+  --   if config.ui.display_context_size then
+  --     local provider, model = state.current_model:match('^(.-)/(.+)$')
+  --     local model_info = config_file.get_model_info(provider, model)
+  --     local limit = state.tokens_count and model_info and model_info.limit and model_info.limit.context or 0
+  --     append_to_footer(util.format_number(state.tokens_count))
+  --     append_to_footer(util.format_percentage(limit > 0 and state.tokens_count / limit))
+  --   end
+  --   if config.ui.display_cost then
+  --     append_to_footer(util.format_cost(state.cost))
+  --   end
+  -- end
   local restore_points = snapshot.get_restore_points()
   if restore_points and #restore_points > 0 then
     local restore_point_text = string.format('%s %d', icons.get('restore_point'), #restore_points)
@@ -50,8 +52,15 @@ function M.render(windows)
   M.set_content({ footer_text })
 
   local loading_animation = require('opencode.ui.loading_animation')
-  if loading_animation.is_running() then
-    loading_animation.render(windows)
+
+  if state.is_running then
+    if not loading_animation.is_running() then
+      loading_animation.start(windows)
+    end
+  else
+    if loading_animation.is_running() then
+      loading_animation.stop()
+    end
   end
 end
 
@@ -75,7 +84,27 @@ end
 function M.setup(windows)
   windows.footer_win = vim.api.nvim_open_win(windows.footer_buf, false, M._build_footer_win_config(windows))
   vim.api.nvim_set_option_value('winhl', 'Normal:OpenCodeHint', { win = windows.footer_win })
-  state.subscribe('restore_points', function(_, new_val, old_val)
+
+  state.subscribe('job_count', function(_, new, old)
+    -- if new == 0 or old == 0 then
+    --   M.render(windows)
+    -- end
+    -- -- vim.notify('job_count: ' .. new)
+    -- -- M.set_content({ 'test' })
+    local loading_animation = require('opencode.ui.loading_animation')
+
+    if new > 0 then
+      if not loading_animation.is_running() then
+        loading_animation.start(windows)
+      end
+    else
+      if loading_animation.is_running() then
+        loading_animation.stop()
+      end
+    end
+  end)
+
+  state.subscribe('restore_points', function(_, _, _)
     M.render(windows)
   end)
 end
@@ -105,23 +134,23 @@ function M.create_buf()
 end
 
 function M.clear()
-  if not M.mounted() then
+  local windows = state.windows
+  if not M.mounted() or not windows then
     return
   end
-  local windows = state.windows
 
   local foot_ns_id = vim.api.nvim_create_namespace('opencode_footer')
   vim.api.nvim_buf_clear_namespace(windows.footer_buf, foot_ns_id, 0, -1)
 
   M.set_content({})
-
-  state.tokens_count = 0
-  state.cost = 0
+  --
+  -- state.tokens_count = 0
+  -- state.cost = 0
 end
 
 function M.set_content(lines)
   local windows = state.windows
-  if not M.mounted() then
+  if not M.mounted() or not windows then
     return
   end
 

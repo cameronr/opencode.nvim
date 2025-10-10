@@ -109,6 +109,8 @@ function M.send_message(prompt, opts)
     :create_message(state.active_session.id, params)
     :and_then(function(response)
       if not response or not response.info or not response.parts then
+        -- fall back to full render. incremental render is handled
+        -- event manager
         ui.render_output()
       end
 
@@ -116,6 +118,7 @@ function M.send_message(prompt, opts)
     end)
     :catch(function(err)
       vim.notify('Error sending message to session: ' .. vim.inspect(err), vim.log.levels.ERROR)
+      M.stop()
     end)
 end
 
@@ -148,7 +151,7 @@ function M.before_run(opts)
   opts = opts or {}
 
   M.stop()
-  ui.clear_output()
+  -- ui.clear_output()
 
   M.open({
     new_session = is_new_session,
@@ -183,7 +186,7 @@ function M.stop()
     end
     require('opencode.ui.footer').clear()
     ui.stop_render_output()
-    require('opencode.ui.streaming_renderer').reset_and_render()
+    -- require('opencode.ui.streaming_renderer').reset_and_render()
     input_window.set_content('')
     require('opencode.history').index = nil
     ui.focus_input()
