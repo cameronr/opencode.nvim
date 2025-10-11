@@ -9,6 +9,10 @@ function M.get_opencode_config()
   if not M.config_promise then
     local state = require('opencode.state')
     M.config_promise = state.api_client:get_config()
+    -- shouldn't normally happen but prevents error in replay tester
+    if not M.config_promise then
+      return
+    end
   end
   return M.config_promise:wait() --[[@as OpencodeConfigFile|nil]]
 end
@@ -26,10 +30,11 @@ end
 function M.get_opencode_providers()
   if not M.providers_promise then
     local state = require('opencode.state')
-    if not state.api_client then
-      return nil
-    end
+    -- shouldn't normally happen but prevents error in replay tester
     M.providers_promise = state.api_client:list_providers()
+    if not M.providers_promise then
+      return
+    end
   end
   return M.providers_promise:wait() --[[@as OpencodeProvidersResponse|nil]]
 end

@@ -55,12 +55,17 @@ function M.setup_windows()
     return false
   end
 
+  local empty_fn = function() end
+
   vim.schedule(function()
     if state.windows and state.windows.output_win then
       vim.api.nvim_set_current_win(state.windows.output_win)
       vim.api.nvim_set_option_value('signcolumn', 'yes', { win = state.windows.output_win })
       pcall(vim.api.nvim_buf_del_keymap, state.windows.output_buf, 'n', '<esc>')
     end
+
+    -- no api calls
+    state.api_client._call = empty_fn
   end)
 
   return true

@@ -23,6 +23,10 @@ end
 function OpencodeApiClient:_call(endpoint, method, body, query)
   if not self.base_url then
     local state = require('opencode.state')
+    -- shouldn't normally happen but prevents error in replay tester
+    if not state.opencode_server_job then
+      return nil
+    end
     self.base_url = state.opencode_server_job.url:gsub('/$', '')
   end
   local url = self.base_url .. endpoint

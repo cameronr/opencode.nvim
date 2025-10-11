@@ -111,6 +111,7 @@ function M.create_windows()
   input_window.setup(windows)
   output_window.setup(windows)
   footer.setup(windows)
+  topbar.setup()
 
   autocmds.setup_autocmds(windows)
   autocmds.setup_resize_handler(windows)
