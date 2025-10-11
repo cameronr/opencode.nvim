@@ -37,20 +37,48 @@ local function capture_output()
 end
 
 describe('streaming_renderer', function()
+  local original_time_ago
+
   before_each(function()
     streaming_renderer.reset()
     state.windows = ui.create_windows()
+
+    local util = require('opencode.util')
+    original_time_ago = util.time_ago
+    util.time_ago = function(timestamp)
+      if timestamp > 1e12 then
+        timestamp = math.floor(timestamp / 1000)
+      end
+      return os.date('%Y-%m-%d %H:%M:%S', timestamp)
+    end
   end)
 
   after_each(function()
     if state.windows then
       ui.close_windows(state.windows)
     end
+
+    local util = require('opencode.util')
+    util.time_ago = original_time_ago
   end)
 
   it('replays simple-session correctly', function()
     local events = load_test_data('tests/data/simple-session.json')
     local expected = load_test_data('tests/data/simple-session.expected.json')
+
+    replay_events(events)
+
+    vim.wait(100)
+
+    local actual = capture_output()
+
+    assert.are.same(expected.lines, actual.lines)
+    assert.are.same(expected.extmarks, actual.extmarks)
+  end)
+
+  it('replays updating-text correctly', function()
+    local events = load_test_data('tests/data/updating-text.json')
+    local expected = load_test_data('tests/data/updating-text.expected.json')
 
     replay_events(events)
 

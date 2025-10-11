@@ -37,6 +37,15 @@ end
 function M.setup_windows()
   streaming_renderer.reset()
 
+  local util = require('opencode.util')
+  M.original_time_ago = util.time_ago
+  util.time_ago = function(timestamp)
+    if timestamp > 1e12 then
+      timestamp = math.floor(timestamp / 1000)
+    end
+    return os.date('%Y-%m-%d %H:%M:%S', timestamp)
+  end
+
   local ok, err = pcall(function()
     state.windows = ui.create_windows()
   end)
