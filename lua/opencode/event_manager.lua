@@ -338,6 +338,10 @@ function EventManager.setup()
     -- vim.notify(vim.inspect(event_data) .. ',')
     streaming_renderer.handle_session_compacted()
   end)
+
+  state.event_manager:subscribe('session.error', function(event_data)
+    streaming_renderer.handle_session_error(event_data)
+  end)
 end
 
 return EventManager

@@ -835,4 +835,20 @@ function M.format_message_header_isolated(message, msg_idx)
   }
 end
 
+function M.format_error_callout(error_text)
+  local temp_output = Output.new()
+  local old_output = M.output
+  M.output = temp_output
+
+  temp_output:add_empty_line()
+  M._format_callout('ERROR', error_text)
+
+  M.output = old_output
+
+  return {
+    lines = temp_output:get_lines(),
+    extmarks = temp_output:get_extmarks(),
+  }
+end
+
 return M

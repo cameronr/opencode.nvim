@@ -507,4 +507,19 @@ function M.reset_and_render()
   require('opencode.ui.output_renderer').render(state.windows, true)
 end
 
+function M.handle_session_error(event)
+  if not event or not event.properties or not event.properties.error then
+    return
+  end
+
+  local error_data = event.properties.error
+  local error_message = error_data.data and error_data.data.message or vim.inspect(error_data)
+
+  local formatter = require('opencode.ui.session_formatter')
+  local formatted = formatter.format_error_callout(error_message)
+
+  M._write_formatted_data(formatted)
+  M._scroll_to_bottom()
+end
+
 return M
