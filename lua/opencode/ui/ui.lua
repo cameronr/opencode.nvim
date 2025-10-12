@@ -17,6 +17,8 @@ function M.scroll_to_bottom()
     end)
   end)
 
+  -- TODO: shouldn't have hardcoded calls to render_markdown,
+  -- should support user callbacks
   vim.defer_fn(function()
     renderer.render_markdown()
   end, 200)
@@ -200,15 +202,15 @@ end
 --   renderer.render_incremental(state.windows, message)
 -- end
 
-function M.render_lines(lines)
-  M.clear_output()
-  renderer.write_output(state.windows, lines)
-  renderer.render_markdown()
-end
+-- function M.render_lines(lines)
+--   M.clear_output()
+--   renderer.write_output(state.windows, lines)
+--   renderer.render_markdown()
+-- end
 
-function M.stop_render_output()
-  renderer.stop()
-end
+-- function M.stop_render_output()
+--   renderer.stop()
+-- end
 
 function M.select_session(sessions, cb)
   local util = require('opencode.util')
