@@ -13,6 +13,7 @@ Output.__index = Output
 ---@field add_lines fun(self: Output, lines: string[], prefix?: string)
 ---@field add_empty_line fun(self: Output): number?
 ---@field clear fun(self: Output)
+---@field is_empty fun(self: Output): boolean
 ---@field get_line_count fun(self: Output): number
 ---@field get_lines fun(self: Output): string[]
 ---@field add_extmark fun(self: Output, idx: number, extmark: OutputExtmark|fun(): OutputExtmark)
@@ -86,6 +87,8 @@ function Output:clear()
   self.actions = {}
 end
 
+---Returns true if lines, extmarks, and actions are all empty tables
+---@return boolean
 function Output:is_empty()
   return vim.tbl_isempty(self.lines) and vim.tbl_isempty(self.extmarks) and vim.tbl_isempty(self.actions)
 end
