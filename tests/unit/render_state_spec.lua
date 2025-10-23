@@ -376,6 +376,22 @@ describe('RenderState', function()
       local success = render_state:remove_message('nonexistent')
       assert.is_false(success)
     end)
+
+    it('removes unrendered message without shifting', function()
+      local msg1 = { info = { id = 'msg1' } }
+      local msg2 = { info = { id = 'msg2' } }
+      render_state:set_message(msg1, -1, -1)
+      render_state:set_message(msg2, 6, 10)
+
+      local success = render_state:remove_message('msg1')
+      assert.is_true(success)
+
+      assert.is_nil(render_state:get_message('msg1'))
+
+      local result2 = render_state:get_message('msg2')
+      assert.equals(6, result2.line_start)
+      assert.equals(10, result2.line_end)
+    end)
   end)
 
   describe('shift_all', function()
@@ -486,6 +502,43 @@ describe('RenderState', function()
 
     it('does nothing for non-existent part', function()
       render_state:update_part_data({ id = 'nonexistent' })
+    end)
+  end)
+
+  describe('get_unrendered_message_ids', function()
+    it('returns empty list when no unrendered messages', function()
+      local msg1 = { info = { id = 'msg1' } }
+      local msg2 = { info = { id = 'msg2' } }
+      render_state:set_message(msg1, 1, 5)
+      render_state:set_message(msg2, 6, 10)
+
+      local unrendered = render_state:get_unrendered_message_ids()
+      assert.same({}, unrendered)
+    end)
+
+    it('returns list of unrendered message IDs', function()
+      local msg1 = { info = { id = 'msg1' } }
+      local msg2 = { info = { id = 'msg2' } }
+      local msg3 = { info = { id = 'msg3' } }
+      render_state:set_message(msg1, -1, -1)
+      render_state:set_message(msg2, 6, 10)
+      render_state:set_message(msg3, -1, -1)
+
+      local unrendered = render_state:get_unrendered_message_ids()
+      table.sort(unrendered)
+      assert.same({ 'msg1', 'msg3' }, unrendered)
+    end)
+
+    it('returns sorted list of message IDs', function()
+      local msg1 = { info = { id = 'zzz' } }
+      local msg2 = { info = { id = 'aaa' } }
+      local msg3 = { info = { id = 'mmm' } }
+      render_state:set_message(msg1, -1, -1)
+      render_state:set_message(msg2, -1, -1)
+      render_state:set_message(msg3, -1, -1)
+
+      local unrendered = render_state:get_unrendered_message_ids()
+      assert.same({ 'aaa', 'mmm', 'zzz' }, unrendered)
     end)
   end)
 end)

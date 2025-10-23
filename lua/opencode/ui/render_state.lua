@@ -21,6 +21,29 @@ local state = require('opencode.state')
 ---@field _parts table<string, RenderedPart> Part ID -> rendered part
 ---@field _line_index LineIndex Line number -> ID mappings
 ---@field _line_index_valid boolean Whether line index is up to date
+---@field reset fun(self: RenderState)
+---@field get_message fun(self: RenderState, message_id: string): RenderedMessage?
+---@field get_part fun(self: RenderState, part_id: string): RenderedPart?
+---@field get_part_by_call_id fun(self: RenderState, call_id: string, message_id: string): string?
+---@field get_part_by_snapshot_id fun(self: RenderState, snapshot_id: string): OpencodeMessagePart?
+---@field get_part_at_line fun(self: RenderState, line: integer): RenderedPart?
+---@field get_message_at_line fun(self: RenderState, line: integer): RenderedMessage?
+---@field get_actions_at_line fun(self: RenderState, line: integer): table[]
+---@field set_message fun(self: RenderState, message: OpencodeMessage, line_start: integer?, line_end: integer?)
+---@field set_part fun(self: RenderState, part: OpencodeMessagePart, line_start: integer?, line_end: integer?)
+---@field update_part_lines fun(self: RenderState, part_id: string, new_line_start: integer, new_line_end: integer): boolean
+---@field update_part_data fun(self: RenderState, part_ref: OpencodeMessagePart)
+---@field add_actions fun(self: RenderState, part_id: string, actions: table[], offset: integer?)
+---@field clear_actions fun(self: RenderState, part_id: string)
+---@field get_all_actions fun(self: RenderState): table[]
+---@field remove_part fun(self: RenderState, part_id: string): boolean
+---@field remove_message fun(self: RenderState, message_id: string): boolean
+---@field shift_all fun(self: RenderState, from_line: integer, delta: integer)
+---@field is_message_unrendered fun(self: RenderState, rendered_message: RenderedMessage?): boolean
+---@field get_unrendered_message_ids fun(self: RenderState): string[]
+---@field _ensure_line_index fun(self: RenderState)
+---@field _rebuild_line_index fun(self: RenderState)
+
 local RenderState = {}
 RenderState.__index = RenderState
 
@@ -342,6 +365,11 @@ function RenderState:remove_message(message_id)
     return false
   end
 
+  if msg_data.line_start == -1 and msg_data.line_end == -1 then
+    self._messages[message_id] = nil
+    return true
+  end
+
   local line_count = msg_data.line_end - msg_data.line_start + 1
   local shift_from = msg_data.line_end + 1
 
@@ -437,6 +465,29 @@ function RenderState:_rebuild_line_index()
     end
   end
   self._line_index_valid = true
+end
+
+---Check if a rendered message is unrendered (deferred)
+---@param rendered_message RenderedMessage? Rendered message to check
+---@return boolean True if message is unrendered
+function RenderState:is_message_unrendered(rendered_message)
+  if not rendered_message then
+    return false
+  end
+  return rendered_message.line_start == -1 and rendered_message.line_end == -1
+end
+
+---Get all unrendered message IDs, mostly used in unit tests
+---@return string[] List of message IDs that are unrendered
+function RenderState:get_unrendered_message_ids()
+  local unrendered = {}
+  for msg_id, msg_data in pairs(self._messages) do
+    if self:is_message_unrendered(msg_data) then
+      table.insert(unrendered, msg_id)
+    end
+  end
+  table.sort(unrendered)
+  return unrendered
 end
 
 return RenderState

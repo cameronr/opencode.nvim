@@ -69,7 +69,6 @@ local function assert_output_matches(expected, actual, name)
   )
 
   if expected.actions then
-    -- Sort both arrays for consistent comparison since order doesn't matter
     local function sort_actions(actions)
       local sorted = vim.deepcopy(actions)
       table.sort(sorted, function(a, b)
@@ -85,6 +84,27 @@ local function assert_output_matches(expected, actual, name)
         'Actions mismatch:\n  Expected: %s\n  Actual: %s',
         vim.inspect(expected.actions),
         vim.inspect(actual.actions)
+      )
+    )
+  end
+
+  local expected_unrendered = expected.unrendered_messages or {}
+  local actual_unrendered = actual.unrendered_messages or {}
+
+  if expected.unrendered_messages ~= nil then
+    assert.are.equal(
+      #expected_unrendered,
+      #actual_unrendered,
+      string.format('Unrendered message count mismatch: expected %d, got %d', #expected_unrendered, #actual_unrendered)
+    )
+
+    assert.same(
+      expected_unrendered,
+      actual_unrendered,
+      string.format(
+        'Unrendered messages mismatch:\n  Expected: %s\n  Actual: %s',
+        vim.inspect(expected_unrendered),
+        vim.inspect(actual_unrendered)
       )
     )
   end
@@ -150,4 +170,53 @@ describe('renderer', function()
       end
     end
   end
+
+  describe('unrendered messages', function()
+    local renderer
+
+    before_each(function()
+      renderer = require('opencode.ui.renderer')
+    end)
+
+    it('is_message_unrendered returns true for unrendered message', function()
+      local rendered_message = { line_start = -1, line_end = -1 }
+      local render_state = require('opencode.ui.render_state')
+      local rs = render_state.new()
+      assert.is_true(rs:is_message_unrendered(rendered_message))
+    end)
+
+    it('is_message_unrendered returns false for rendered message', function()
+      local rendered_message = { line_start = 1, line_end = 5 }
+      local render_state = require('opencode.ui.render_state')
+      local rs = render_state.new()
+      assert.is_false(rs:is_message_unrendered(rendered_message))
+    end)
+
+    it('is_message_unrendered returns false for nil', function()
+      local render_state = require('opencode.ui.render_state')
+      local rs = render_state.new()
+      assert.is_false(rs:is_message_unrendered(nil))
+    end)
+
+    it('_remove_message_from_buffer removes unrendered message', function()
+      local msg = { info = { id = 'msg1' } }
+      renderer._render_state:set_message(msg, -1, -1)
+
+      renderer._remove_message_from_buffer('msg1')
+
+      assert.is_nil(renderer._render_state:get_message('msg1'))
+    end)
+
+    it('_replace_message_in_buffer returns false for unrendered message', function()
+      local msg = { info = { id = 'msg1' } }
+      renderer._render_state:set_message(msg, -1, -1)
+      local Output = require('opencode.ui.output')
+      local formatted = Output:new()
+      formatted.lines = { 'test' }
+
+      local success = renderer._replace_message_in_buffer('msg1', formatted)
+
+      assert.is_false(success)
+    end)
+  end)
 end)

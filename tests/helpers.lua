@@ -271,6 +271,7 @@ function M.capture_output(output_buf, namespace)
     lines = vim.api.nvim_buf_get_lines(output_buf, 0, -1, false) or {},
     extmarks = vim.api.nvim_buf_get_extmarks(output_buf, namespace, 0, -1, { details = true }) or {},
     actions = vim.deepcopy(renderer._render_state:get_all_actions()),
+    unrendered_messages = renderer._render_state:get_unrendered_message_ids(),
   }
 end
 

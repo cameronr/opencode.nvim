@@ -308,6 +308,11 @@ end
 ---@param message_id string Message ID
 function M._remove_message_from_buffer(message_id)
   local cached = M._render_state:get_message(message_id)
+  if M._render_state:is_message_unrendered(cached) then
+    M._render_state:remove_message(message_id)
+    return
+  end
+
   if not cached or not cached.line_start or not cached.line_end then
     return
   end
@@ -337,6 +342,10 @@ end
 ---@return boolean Success status
 function M._replace_message_in_buffer(message_id, formatted_data)
   local cached = M._render_state:get_message(message_id)
+  if M._render_state:is_message_unrendered(cached) then
+    return false
+  end
+
   if not cached or not cached.line_start or not cached.line_end then
     return false
   end
@@ -396,9 +405,7 @@ function M.on_message_updated(message, revert_index)
     found_msg.info = msg.info
 
     if rerender_message and not revert_index then
-      -- this message was deferred but now we need to render it
-      ---@diagnostic disable-next-line: need-check-nil
-      if rendered_message.line_start == -1 and rendered_message.line_end == -1 then
+      if M._render_state:is_message_unrendered(rendered_message) then
         M._add_message_to_buffer(msg)
       else
         local header_data = formatter.format_message_header(found_msg)
@@ -491,7 +498,7 @@ function M.on_part_updated(properties, revert_index)
     return
   end
 
-  if rendered_message.line_start == -1 and rendered_message.line_end == -1 then
+  if M._render_state:is_message_unrendered(rendered_message) then
     M._add_message_to_buffer(message)
   end
 

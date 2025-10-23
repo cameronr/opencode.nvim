@@ -196,15 +196,9 @@ function M.save_output(filename)
     return nil
   end
 
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  local extmarks = vim.api.nvim_buf_get_extmarks(buf, output_window.namespace, 0, -1, { details = true })
-
-  local snapshot = {
-    lines = lines,
-    extmarks = M.normalize_namespace_ids(extmarks),
-    actions = vim.deepcopy(renderer._render_state:get_all_actions()),
-    timestamp = os.time(),
-  }
+  local snapshot = helpers.capture_output(buf, output_window.namespace)
+  snapshot.extmarks = M.normalize_namespace_ids(snapshot.extmarks)
+  snapshot.timestamp = os.time()
 
   if filename then
     local json = vim.json.encode(snapshot)
