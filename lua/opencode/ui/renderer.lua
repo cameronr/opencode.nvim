@@ -214,7 +214,7 @@ function M._write_formatted_data(formatted_data, part_id)
   local new_lines = formatted_data.lines
   local extmarks = formatted_data.extmarks
 
-  if #new_lines == 0 or not buf then
+  if formatted_data:is_empty() or not buf then
     return nil
   end
 
@@ -235,7 +235,7 @@ end
 ---@param part_id string Part ID
 ---@param formatted_data Output Formatted data as Output object
 ---@return boolean Success status
-function M._insert_part_to_buffer(part_id, formatted_data)
+function M._add_part_to_buffer(part_id, formatted_data)
   local cached = M._render_state:get_part(part_id)
   if not cached then
     return false
@@ -322,6 +322,15 @@ function M._remove_message_from_buffer(message_id)
   M._render_state:remove_message(message_id)
 end
 
+function M._add_message_to_buffer(message)
+  local header_data = formatter.format_message_header(message)
+  local range = M._write_formatted_data(header_data)
+
+  if range then
+    M._render_state:set_message(message, range.line_start, range.line_end)
+  end
+end
+
 ---Replace existing message header in buffer
 ---@param message_id string Message ID
 ---@param formatted_data Output Formatted header as Output object
@@ -387,17 +396,24 @@ function M.on_message_updated(message, revert_index)
     found_msg.info = msg.info
 
     if rerender_message and not revert_index then
-      local header_data = formatter.format_message_header(found_msg)
-      M._replace_message_in_buffer(msg.info.id, header_data)
+      -- this message was deferred but now we need to render it
+      ---@diagnostic disable-next-line: need-check-nil
+      if rendered_message.line_start == -1 and rendered_message.line_end == -1 then
+        M._add_message_to_buffer(msg)
+      else
+        local header_data = formatter.format_message_header(found_msg)
+        M._replace_message_in_buffer(msg.info.id, header_data)
+      end
     end
   else
     table.insert(state.messages, msg)
 
-    local header_data = formatter.format_message_header(msg)
-    local range = M._write_formatted_data(header_data)
-
-    if range then
-      M._render_state:set_message(msg, range.line_start, range.line_end)
+    if msg.info.error then
+      -- has an error message, don't defer rendering
+      M._add_message_to_buffer(msg)
+    else
+      -- Defer rendering the message so add it but don't render it
+      M._render_state:set_message(msg, -1, -1)
     end
 
     state.current_message = msg
@@ -467,12 +483,20 @@ function M.on_part_updated(properties, revert_index)
 
   local formatted = formatter.format_part(part, message)
 
+  if formatted:is_empty() then
+    return
+  end
+
   if revert_index and is_new_part then
     return
   end
 
+  if rendered_message.line_start == -1 and rendered_message.line_end == -1 then
+    M._add_message_to_buffer(message)
+  end
+
   if is_new_part then
-    M._insert_part_to_buffer(part.id, formatted)
+    M._add_part_to_buffer(part.id, formatted)
   else
     M._replace_part_in_buffer(part.id, formatted)
   end
@@ -559,7 +583,6 @@ end
 ---@param properties {sessionID: string} Event properties
 function M.on_session_compacted(properties)
   vim.notify('on_session_compacted')
-  -- TODO: render a note that the session was compacted
   -- FIXME: did we need unset state.last_sent_context because the
   -- session was compacted?
 end

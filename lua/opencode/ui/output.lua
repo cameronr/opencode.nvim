@@ -86,6 +86,10 @@ function Output:clear()
   self.actions = {}
 end
 
+function Output:is_empty()
+  return vim.tbl_isempty(self.lines) and vim.tbl_isempty(self.extmarks) and vim.tbl_isempty(self.actions)
+end
+
 ---Get the number of lines
 ---@return number
 function Output:get_line_count()
