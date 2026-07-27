@@ -13,21 +13,22 @@ local ctx = {
   ---@type table<string, Output>
   formatted_messages = {},
   pending = {
-    dirty_message_order = {},
-    dirty_messages = {},
-    dirty_part_by_message = {},
-    dirty_part_order = {},
-    dirty_parts = {},
-    removed_part_order = {},
-    removed_parts = {},
-    removed_message_order = {},
-    removed_messages = {},
+    dirty_message_order = {}, ---@type string[]
+    dirty_messages = {}, ---@type table<string, boolean>
+    dirty_part_by_message = {}, ---@type table<string, string[]>
+    dirty_part_order = {}, ---@type string[]
+    dirty_parts = {}, ---@type table<string, string>
+    removed_part_order = {}, ---@type string[]
+    removed_parts = {}, ---@type table<string, boolean>
+    removed_message_order = {}, ---@type string[]
+    removed_messages = {}, ---@type table<string, boolean>
   },
-  flush_scheduled = false,
-  markdown_render_scheduled = false,
-  bulk_mode = false,
+  flush_scheduled = false, ---@type boolean
+  markdown_render_scheduled = false, ---@type boolean
+  bulk_mode = false, ---@type boolean
   bulk_buffer_lines = {},
   bulk_extmarks_by_line = {},
+  ---@type {from: number, to: number}[]
   bulk_folds = {},
   ---@type {from: number, to: number}[]
   global_folds = {},

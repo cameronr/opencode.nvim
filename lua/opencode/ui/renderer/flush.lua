@@ -7,7 +7,7 @@ local output_window = require('opencode.ui.output_window')
 local ctx = require('opencode.ui.renderer.ctx')
 local scroll = require('opencode.ui.renderer.scroll')
 local buffer = require('opencode.ui.renderer.buffer')
-local append = require('opencode.ui.renderer.append')
+local output_diff = require('opencode.ui.renderer.output_diff')
 
 local M = {}
 local warned_part_render_error = false
@@ -92,54 +92,6 @@ local function with_suppressed_output_autocmds(fn)
   end
 
   return result
-end
-
----@param a string[]|nil
----@param b string[]|nil
----@return boolean
-local function lines_equal(a, b)
-  a = a or {}
-  b = b or {}
-  if #a ~= #b then
-    return false
-  end
-  for i = 1, #a do
-    if a[i] ~= b[i] then
-      return false
-    end
-  end
-  return true
-end
-
----@param m OutputExtmark|fun(): OutputExtmark
----@return OutputExtmark
-local function resolve_mark(m)
-  return type(m) == 'function' and m() or m
-end
-
----@param a table<number, (OutputExtmark|fun(): OutputExtmark)[]>|nil
----@param b table<number, (OutputExtmark|fun(): OutputExtmark)[]>|nil
----@return boolean
-local function extmarks_equal(a, b)
-  a = a or {}
-  b = b or {}
-  for k, va in pairs(a) do
-    local vb = b[k]
-    if not vb or #va ~= #vb then
-      return false
-    end
-    for i = 1, #va do
-      if not vim.deep_equal(resolve_mark(va[i]), resolve_mark(vb[i])) then
-        return false
-      end
-    end
-  end
-  for k in pairs(b) do
-    if not a[k] then
-      return false
-    end
-  end
-  return true
 end
 
 ---@return boolean
@@ -309,20 +261,19 @@ local function new_formatter_context()
 end
 
 ---@param message_id string
+---@param prev Output|nil
 ---@return Output|nil
-local function format_message(message_id)
+local function format_message(message_id, prev)
   local rendered_message = ctx.render_state:get_message(message_id)
   local message = rendered_message and rendered_message.message
   if not message then
     return nil
   end
 
-  local prev = ctx.formatted_messages[message_id]
   local previous_rendered = ctx.render_state:get_previous_message(state.messages or {}, message_id)
   local formatted = formatter.format_message_header(message, previous_rendered and previous_rendered.message or nil)
 
-  if prev and lines_equal(prev.lines, formatted.lines) and extmarks_equal(prev.extmarks, formatted.extmarks) then
-    -- no visible change
+  if output_diff.is_unchanged(prev, formatted) then
     return nil
   end
 
@@ -359,7 +310,7 @@ end
 ---@param message_id string
 local function apply_message(message_id)
   local previous = ctx.formatted_messages[message_id]
-  local formatted = format_message(message_id)
+  local formatted = format_message(message_id, previous)
   if not formatted then
     return
   end
@@ -382,16 +333,17 @@ local function apply_part(part_id, message_id, render_context)
     and cached
     and cached.line_start
     and cached.line_end
-    and append.is_append_only(previous.lines or {}, formatted.lines or {})
+    and output_diff.is_append_only(previous.lines or {}, formatted.lines or {})
 
   ctx.formatted_parts[part_id] = formatted
   ctx.last_part_formatted = { part_id = part_id, formatted_data = formatted }
 
   if can_append then
+    local tail_offset = #(previous.lines or {})
     buffer.append_part_now(
       part_id,
-      append.tail_lines(previous.lines or {}, formatted.lines or {}),
-      append.tail_extmarks(#(previous.lines or {}), formatted.extmarks),
+      output_diff.slice_lines(formatted.lines, tail_offset + 1),
+      output_diff.slice_extmarks(formatted.extmarks, tail_offset),
       previous
     )
     return
