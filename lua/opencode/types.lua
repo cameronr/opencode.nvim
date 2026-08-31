@@ -443,6 +443,7 @@
 
 ---@class BashToolMetadata: ToolMetadataBase
 ---@field output string|nil
+---@field command string|nil
 
 ---@class FileToolMetadata: ToolMetadataBase
 ---@field diff string|nil The diff of changes made to the file

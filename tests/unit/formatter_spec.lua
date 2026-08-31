@@ -4,6 +4,7 @@ local formatter = require('opencode.ui.formatter')
 local Output = require('opencode.ui.output')
 local state = require('opencode.state')
 local util = require('opencode.util')
+local icons = require('opencode.ui.icons')
 
 describe('formatter', function()
   before_each(function()
@@ -133,6 +134,63 @@ describe('formatter', function()
     })
 
     assert.are.equal(' **  tool** ', output.lines[3])
+  end)
+
+  it('renders task child bash commands on one line', function()
+    local message = {
+      info = {
+        id = 'msg_1',
+        role = 'assistant',
+        sessionID = 'ses_1',
+      },
+      parts = {},
+    }
+
+    local part = {
+      id = 'prt_1',
+      type = 'tool',
+      tool = 'task',
+      messageID = 'msg_1',
+      sessionID = 'ses_1',
+      state = {
+        status = 'completed',
+        input = {
+          description = 'inspect repository',
+        },
+        metadata = {
+          sessionId = 'ses_child',
+        },
+      },
+    }
+
+    local child_parts = {
+      {
+        id = 'prt_child_1',
+        type = 'tool',
+        tool = 'bash',
+        messageID = 'msg_child_1',
+        sessionID = 'ses_child',
+        state = {
+          status = 'completed',
+          input = {
+            command = 'git status\n--short',
+            description = 'show repository status',
+          },
+        },
+      },
+    }
+
+    local output = formatter.format_part(part, message, true, {
+      interactive = true,
+      get_child_parts = function(session_id)
+        if session_id == 'ses_child' then
+          return child_parts
+        end
+        return nil
+      end,
+    })
+
+    assert.are.equal(' **' .. icons.get('run') .. ' run** `git status --short`', output.lines[3])
   end)
 
   it('renders task child apply_patch tools without formatter errors', function()
